@@ -18,7 +18,17 @@ const COLOR_PALETTE = [
   "#d35400",
 ];
 
+const todayKey = new Date().toISOString().slice(0, 10);
+
 function setRandomColors() {
+  const saved = JSON.parse(localStorage.getItem('wordleGame'));
+  if (saved && saved.date === todayKey && saved.colors) {
+    const [w, m, c] = saved.colors;
+    document.documentElement.style.setProperty('--color-wrong',     w);
+    document.documentElement.style.setProperty('--color-misplaced', m);
+    document.documentElement.style.setProperty('--color-correct',   c);
+    return [w, m, c];
+  }
   const pool = [...COLOR_PALETTE];
   const picked = [];
   for (let i = 0; i < 3; i++) {
@@ -29,9 +39,10 @@ function setRandomColors() {
   root.setProperty('--color-wrong',     picked[0]);
   root.setProperty('--color-misplaced', picked[1]);
   root.setProperty('--color-correct',   picked[2]);
+  return picked;
 }
 
-setRandomColors();
+const todayColors = setRandomColors();
 
 // Stats
 function loadStats() {
@@ -86,20 +97,67 @@ document.getElementById('stats-close').addEventListener('click', () =>
   document.getElementById('stats-overlay').classList.remove('show')
 );
 
-document.getElementById('play-again').addEventListener('click', () => location.reload());
+
 
 
 let answer = '';
 
 fetch('https://wordlehintstoday.org/api/v1/wordle/answers/latest?')
   .then(r => r.json())
-  .then(data => { answer = data.answer.toLowerCase(); })
+  .then(data => {
+    answer = data.answer.toLowerCase();
+    restoreGame();
+  })
   .catch(() => { answer = ''; });
 
 let currentRow = 0;
 let currentCol = 0;
 let currentGuess = [];
 let gameOver = false;
+
+function saveGame() {
+  const saved = JSON.parse(localStorage.getItem('wordleGame') || '{}');
+  saved.date = todayKey;
+  saved.colors = todayColors;
+  saved.guesses = saved.guesses || [];
+  // rebuild from tiles
+  const guesses = [];
+  for (let r = 0; r < currentRow; r++) {
+    const word = tiles[r].map(t => t.textContent).join('');
+    const result = tiles[r].map(t => ['correct','misplaced','wrong'].find(c => t.classList.contains(c)) || 'wrong');
+    guesses.push({ word, result });
+  }
+  saved.guesses = guesses;
+  saved.gameOver = gameOver;
+  localStorage.setItem('wordleGame', JSON.stringify(saved));
+}
+
+function restoreGame() {
+  const saved = JSON.parse(localStorage.getItem('wordleGame'));
+  if (!saved || saved.date !== todayKey || !saved.guesses) return;
+  saved.guesses.forEach(({ word, result }) => {
+    word.split('').forEach((letter, i) => {
+      tiles[currentRow][i].textContent = letter;
+      tiles[currentRow][i].classList.add(result[i]);
+      const keyEl = keyMap[letter];
+      const priority = { correct: 3, misplaced: 2, wrong: 1 };
+      const current = priority[keyEl.dataset.state] || 0;
+      if (priority[result[i]] > current) {
+        keyEl.classList.remove('wrong', 'misplaced', 'correct');
+        keyEl.classList.add(result[i]);
+        keyEl.dataset.state = result[i];
+      }
+    });
+    currentRow++;
+  });
+  currentCol = 0;
+  currentGuess = [];
+  if (saved.gameOver) {
+    gameOver = true;
+    const stats = loadStats();
+    showStats(stats, stats.dist.reduce((best, v, i) => v > 0 ? i : best, -1));
+  }
+}
 
 // Build board
 const board = document.getElementById('board');
@@ -174,6 +232,7 @@ async function submitGuess() {
 
   const result = getResult(guess, answer);
   result.forEach((state, i) => {
+
     setTimeout(() => {
       tiles[currentRow][i].classList.add('flip');
       setTimeout(() => {
@@ -200,6 +259,7 @@ async function submitGuess() {
     setTimeout(() => {
       showMessage("🎉 Brilliant!");
       gameOver = true;
+      saveGame();
       const stats = recordResult(true, currentRow);
       showStats(stats, currentRow);
     }, totalDelay);
@@ -210,10 +270,12 @@ async function submitGuess() {
     currentRow++;
     currentCol = 0;
     currentGuess = [];
+    saveGame();
 
     if (currentRow === 6) {
       showMessage(answer.toUpperCase(), 3000);
       gameOver = true;
+      saveGame();
       const stats = recordResult(false, -1);
       showStats(stats, -1);
     }
