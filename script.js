@@ -1,7 +1,3 @@
-const WORDS = [
-  "heart","hubby","charm","honey","groom",
-  "bride","marry","barry","devil","basha",
-];
 
 const KEYBOARD_ROWS = [
   ["q","w","e","r","t","y","u","i","o","p"],
@@ -10,16 +6,16 @@ const KEYBOARD_ROWS = [
 ];
 
 const COLOR_PALETTE = [
-  "#d35400",
+  "#e74c3c",
   "#27ae60",
   "#2980b9",
   "#8e44ad",
-  "#1a5276",
-  "#922b21",
-  "#6c3483",
-  "#1f618d",
-  "#b7950b",
-  "#616a6b",
+  "#e67e22",
+  "#16a085",
+  "#f39c12",
+  "#2c3e50",
+  "#c0392b",
+  "#d35400",
 ];
 
 function setRandomColors() {
@@ -34,6 +30,8 @@ function setRandomColors() {
   root.setProperty('--color-misplaced', picked[1]);
   root.setProperty('--color-correct',   picked[2]);
 }
+
+setRandomColors();
 
 // Stats
 function loadStats() {
@@ -91,7 +89,13 @@ document.getElementById('stats-close').addEventListener('click', () =>
 document.getElementById('play-again').addEventListener('click', () => location.reload());
 
 
-const answer = WORDS[Math.floor(Math.random() * WORDS.length)];
+let answer = '';
+
+fetch('https://wordlehintstoday.org/api/v1/wordle/answers/latest?')
+  .then(r => r.json())
+  .then(data => { answer = data.answer.toLowerCase(); })
+  .catch(() => { answer = ''; });
+
 let currentRow = 0;
 let currentCol = 0;
 let currentGuess = [];
@@ -153,7 +157,7 @@ function handleKey(key) {
   }
 }
 
-function submitGuess() {
+async function submitGuess() {
   if (currentCol < 5) {
     showMessage("Not enough letters");
     shakeRow(currentRow);
@@ -161,7 +165,8 @@ function submitGuess() {
   }
   const guess = currentGuess.join('');
 
-  if (!WORDS.includes(guess)) {
+  const valid = await isWordValid(guess);
+  if (!valid) {
     showMessage("Not in word list");
     shakeRow(currentRow);
     return;
@@ -169,63 +174,76 @@ function submitGuess() {
 
   const result = getResult(guess, answer);
   result.forEach((state, i) => {
-    tiles[currentRow][i].classList.add(state);
+    setTimeout(() => {
+      tiles[currentRow][i].classList.add('flip');
+      setTimeout(() => {
+        tiles[currentRow][i].classList.add(state);
+        tiles[currentRow][i].classList.remove('flip');
+      }, 250);
+    }, i * 150);
+
     const keyEl = keyMap[guess[i]];
     const priority = { correct: 3, misplaced: 2, wrong: 1 };
     const current = priority[keyEl.dataset.state] || 0;
     if (priority[state] > current) {
-      keyEl.classList.remove('wrong', 'misplaced', 'correct');
-      keyEl.classList.add(state);
-      keyEl.dataset.state = state;
+      setTimeout(() => {
+        keyEl.classList.remove('wrong', 'misplaced', 'correct');
+        keyEl.classList.add(state);
+        keyEl.dataset.state = state;
+      }, i * 150 + 250);
     }
   });
 
+  const totalDelay = 5 * 150 + 250;
+
   if (guess === answer) {
-    showMessage("🎉 Brilliant!");
-    gameOver = true;
-    const stats = recordResult(true, currentRow);
-    showStats(stats, currentRow);
+    setTimeout(() => {
+      showMessage("🎉 Brilliant!");
+      gameOver = true;
+      const stats = recordResult(true, currentRow);
+      showStats(stats, currentRow);
+    }, totalDelay);
     return;
   }
 
-  currentRow++;
-  currentCol = 0;
-  currentGuess = [];
+  setTimeout(() => {
+    currentRow++;
+    currentCol = 0;
+    currentGuess = [];
 
-  if (currentRow === 6) {
-    showMessage(answer.toUpperCase(), 3000);
-    gameOver = true;
-    const stats = recordResult(false, -1);
-    showStats(stats, -1);
-  }
+    if (currentRow === 6) {
+      showMessage(answer.toUpperCase(), 3000);
+      gameOver = true;
+      const stats = recordResult(false, -1);
+      showStats(stats, -1);
+    }
+  }, totalDelay);
 }
 
 function getResult(guess, answer) {
   const result = Array(5).fill('wrong');
   const answerArr = answer.split('');
-  const guessArr = guess.split('');
-  const used = Array(5).fill(false);
 
-  // First pass: correct
-  guessArr.forEach((l, i) => {
-    if (l === answerArr[i]) {
-      result[i] = 'correct';
-      used[i] = true;
-      answerArr[i] = null;
-    }
+  guess.split('').forEach((l, i) => {
+    if (l === answerArr[i]) { result[i] = 'correct'; answerArr[i] = null; }
   });
-
-  // Second pass: misplaced
-  guessArr.forEach((l, i) => {
+  guess.split('').forEach((l, i) => {
     if (result[i] === 'correct') return;
     const j = answerArr.indexOf(l);
-    if (j !== -1) {
-      result[i] = 'misplaced';
-      answerArr[j] = null;
-    }
+    if (j !== -1) { result[i] = 'misplaced'; answerArr[j] = null; }
   });
 
   return result;
+}
+
+async function isWordValid(word) {
+  try {
+    const safe = word.replace(/[^a-z]/g, '');
+    const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${safe}`);
+    return r.ok;
+  } catch {
+    return true;
+  }
 }
 
 function shakeRow(row) {

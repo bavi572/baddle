@@ -1,7 +1,7 @@
 :root {
-  --color-wrong: #787c7e;
-  --color-misplaced: #c9b458;
-  --color-correct: #6aaa64;
+  --color-wrong: #888;
+  --color-misplaced: #888;
+  --color-correct: #888;
   --color-empty: #ffffff;
   --color-filled: #ffffff;
 }
@@ -58,6 +58,7 @@ h1 {
   grid-template-columns: repeat(5, 62px);
   gap: 5px;
   margin-bottom: 20px;
+  perspective: 250px;
 }
 
 .tile {
@@ -70,7 +71,6 @@ h1 {
   font-size: 2rem;
   font-weight: 800;
   text-transform: uppercase;
-  color: #fff;
   transition: background 0.1s;
   background: var(--color-empty);
   color: #333;
@@ -131,6 +131,37 @@ h1 {
 .key.misplaced { background: var(--color-misplaced); color: #fff; }
 .key.correct   { background: var(--color-correct);   color: #fff; }
 
+@media (max-width: 480px) {
+  body { padding: 8px; }
+
+  h1 { font-size: 1.4rem; }
+
+  #board {
+    grid-template-rows: repeat(6, 11vw);
+    grid-template-columns: repeat(5, 11vw);
+    gap: 3px;
+    margin-bottom: 12px;
+  }
+
+  .tile {
+    width: 11vw;
+    height: 11vw;
+    font-size: 6vw;
+  }
+
+  .key {
+    height: 10vw;
+    min-width: 8vw;
+    font-size: 3vw;
+    padding: 0 2px;
+    border-radius: 3px;
+  }
+
+  .key.wide { min-width: 12vw; }
+
+  #stats-modal { width: 92vw; padding: 20px 16px; }
+}
+
 #message {
   position: fixed;
   top: 80px;
@@ -158,6 +189,16 @@ h1 {
   40%      { transform: translateX(6px); }
   60%      { transform: translateX(-4px); }
   80%      { transform: translateX(4px); }
+}
+
+@keyframes flip {
+  0%   { transform: rotateX(0); }
+  50%  { transform: rotateX(-90deg); }
+  100% { transform: rotateX(0); }
+}
+
+.tile.flip {
+  animation: flip 0.5s ease forwards;
 }
 
 .shake {
